@@ -9,16 +9,18 @@ from __future__ import division
 from __future__ import print_function
 
 import os
+import json
 import numpy as np
 import pprint
 import pdb
 import time
+import datetime
 import _init_paths
-
 
 import torch
 from torch.autograd import Variable
 import torch.nn as nn
+
 from roi_data_layer.roidb import combined_roidb
 from roi_data_layer.roibatchLoader import roibatchLoader
 from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
@@ -61,9 +63,14 @@ if __name__ == '__main__':
     print('{:d} source roidb entries'.format(len(roidb)))
     print('{:d} target roidb entries'.format(len(roidb_t)))
 
-    output_dir = args.save_dir + "/" + args.net + "/" + args.dataset
+    dt = datetime.datetime.now()
+    output_dir = args.save_dir + "/" + args.net + "/" + args.dataset + '{}_{}'.format(str(dt.date()), str(dt.time())[:8])
+
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
+
+    with open(os.path.join(output_dir, 'config.txt'), 'w') as f:
+        print(cfg, file=f)
 
     sampler_batch = sampler(train_size, args.batch_size)
     sampler_batch_t = sampler(train_size_t, args.batch_size)
@@ -161,13 +168,28 @@ if __name__ == '__main__':
 
     if args.use_tfboard:
         from tensorboardX import SummaryWriter
+        # from torch.utils.tensorboard import SummaryWriter
 
-        logger = SummaryWriter("logs")
+        logger = SummaryWriter('runs/{}'.format(output_dir.split('/')[-1]))
+
     count_iter = 0
     for epoch in range(args.start_epoch, args.max_epochs + 1):
         # setting to train mode
         fasterRCNN.train()
         loss_temp = 0
+        loss_rpn_cls = 0
+        loss_rpn_box = 0
+        loss_rcnn_cls = 0
+        loss_rcnn_box = 0
+        count_fg_t = 0
+
+        if not args.mGPUs:
+            dloss_s = 0
+            dloss_t = 0
+            dloss_s_p = 0
+            dloss_t_p = 0
+            loss_consistent = 0
+
         start = time.time()
         if epoch % (args.lr_decay_step + 1) == 0:
             adjust_learning_rate(optimizer, args.lr_decay_gamma)
@@ -217,7 +239,7 @@ if __name__ == '__main__':
             #gt is empty
             gt_boxes.data.resize_(1, 1, 5).zero_()
             num_boxes.data.resize_(1).zero_()
-            out_d_pixel, out_d = fasterRCNN(im_data, im_info, gt_boxes, num_boxes, target=True)
+            out_d_pixel, out_d, Consistent_loss, fg_cnt_t = fasterRCNN(im_data, im_info, gt_boxes, num_boxes, target=True)
             # domain label
             domain_t = Variable(torch.ones(out_d.size(0)).long().cuda())
             dloss_t = 0.5 * FL(out_d, domain_t)
@@ -226,52 +248,61 @@ if __name__ == '__main__':
             if args.dataset == 'sim10k':
                 loss += (dloss_s + dloss_t + dloss_s_p + dloss_t_p) * args.eta
             else:
-                loss += (dloss_s + dloss_t + dloss_s_p + dloss_t_p)
+                loss += (dloss_s + dloss_t + dloss_s_p + dloss_t_p + 0.1 * Consistent_loss)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
+
+            if args.mGPUs:
+                loss_rpn_cls += rpn_loss_cls.mean().item()
+                loss_rpn_box += rpn_loss_box.mean().item()
+                loss_rcnn_cls += RCNN_loss_cls.mean().item()
+                loss_rcnn_box += RCNN_loss_bbox.mean().item()
+                fg_cnt = torch.sum(rois_label.data.ne(0))
+                bg_cnt = rois_label.data.numel() - fg_cnt
+            else:
+                loss_rpn_cls += rpn_loss_cls.item()
+                loss_rpn_box += rpn_loss_box.item()
+                loss_rcnn_cls += RCNN_loss_cls.item()
+                loss_rcnn_box += RCNN_loss_bbox.item()
+                dloss_s += dloss_s.item()
+                dloss_t += dloss_t.item()
+                dloss_s_p += dloss_s_p.item()
+                dloss_t_p += dloss_t_p.item()
+                loss_consistent += Consistent_loss.item()
+                fg_cnt = torch.sum(rois_label.data.ne(0))
+                bg_cnt = rois_label.data.numel() - fg_cnt
+                count_fg_t += fg_cnt_t
 
             if step % args.disp_interval == 0:
                 end = time.time()
                 if step > 0:
                     loss_temp /= (args.disp_interval + 1)
 
-                if args.mGPUs:
-                    loss_rpn_cls = rpn_loss_cls.mean().item()
-                    loss_rpn_box = rpn_loss_box.mean().item()
-                    loss_rcnn_cls = RCNN_loss_cls.mean().item()
-                    loss_rcnn_box = RCNN_loss_bbox.mean().item()
-                    fg_cnt = torch.sum(rois_label.data.ne(0))
-                    bg_cnt = rois_label.data.numel() - fg_cnt
-                else:
-                    loss_rpn_cls = rpn_loss_cls.item()
-                    loss_rpn_box = rpn_loss_box.item()
-                    loss_rcnn_cls = RCNN_loss_cls.item()
-                    loss_rcnn_box = RCNN_loss_bbox.item()
-                    dloss_s = dloss_s.item()
-                    dloss_t = dloss_t.item()
-                    dloss_s_p = dloss_s_p.item()
-                    dloss_t_p = dloss_t_p.item()
-                    fg_cnt = torch.sum(rois_label.data.ne(0))
-                    bg_cnt = rois_label.data.numel() - fg_cnt
-
                 print("[session %d][epoch %2d][iter %4d/%4d] loss: %.4f, lr: %.2e" \
                       % (args.session, epoch, step, iters_per_epoch, loss_temp, lr))
-                print("\t\t\tfg/bg=(%d/%d), time cost: %f" % (fg_cnt, bg_cnt, end - start))
-                print(
-                    "\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f dloss s: %.4f dloss t: %.4f dloss s pixel: %.4f dloss t pixel: %.4f eta: %.4f" \
-                    % (loss_rpn_cls, loss_rpn_box, loss_rcnn_cls, loss_rcnn_box, dloss_s, dloss_t, dloss_s_p, dloss_t_p,
-                       args.eta))
+                print("\t\t\tfg/bg=(%d/%d), fg_t=(%d), time cost: %f" % (fg_cnt, bg_cnt, count_fg_t / (step + 1), end - start))
+                print("\t\t\trpn_cls: %.4f, rpn_box: %.4f, rcnn_cls: %.4f, rcnn_box %.4f dloss s: %.4f dloss t: %.4f "
+                      "dloss s pixel: %.4f dloss t pixel: %.4f Consistent_loss: %.4f eta: %.4f" \
+                    % (loss_rpn_cls / (step + 1), loss_rpn_box / (step + 1), loss_rcnn_cls / (step + 1),
+                       loss_rcnn_box / (step + 1), dloss_s / (step + 1), dloss_t / (step + 1), dloss_s_p / (step + 1),
+                       dloss_t_p / (step + 1), loss_consistent / (step + 1), args.eta))
                 if args.use_tfboard:
                     info = {
                         'loss': loss_temp,
-                        'loss_rpn_cls': loss_rpn_cls,
-                        'loss_rpn_box': loss_rpn_box,
-                        'loss_rcnn_cls': loss_rcnn_cls,
-                        'loss_rcnn_box': loss_rcnn_box
+                        'loss_rpn_cls': loss_rpn_cls / (step + 1),
+                        'loss_rpn_box': loss_rpn_box / (step + 1),
+                        'loss_rcnn_cls': loss_rcnn_cls / (step + 1),
+                        'loss_rcnn_box': loss_rcnn_box / (step + 1),
+                        'loss_consistent': loss_consistent / (step + 1),
+                        'count_fg_target': count_fg_t / (step + 1)
                     }
-                    logger.add_scalars("logs_s_{}/losses".format(args.session), info,
-                                       (epoch - 1) * iters_per_epoch + step)
+                    for log_name in info.keys():
+                        if 'loss' in log_name:
+                            logger.add_scalar("loss/{}".format(log_name), info[log_name], (epoch - 1) * iters_per_epoch + step)
+                        else:
+                            logger.add_scalar("count/{}".format(log_name), info[log_name],
+                                              (epoch - 1) * iters_per_epoch + step)
 
                 loss_temp = 0
                 start = time.time()

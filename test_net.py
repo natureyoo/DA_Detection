@@ -161,7 +161,7 @@ if __name__ == '__main__':
       rpn_loss_cls, rpn_loss_box, \
       RCNN_loss_cls, RCNN_loss_bbox, \
       rois_label,d_pred,_ = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-
+      import pdb; pdb.set_trace()
       scores = cls_prob.data
       boxes = rois.data[:, :, 1:5]
       d_pred = d_pred.data

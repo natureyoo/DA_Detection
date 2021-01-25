@@ -14,7 +14,7 @@ from model.roi_align.modules.roi_align import RoIAlignAvg
 from model.rpn.proposal_target_layer_cascade import _ProposalTargetLayer
 import time
 import pdb
-from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta,grad_reverse
+from model.utils.net_utils import _smooth_l1_loss, _crop_pool_layer, _affine_grid_gen, _affine_theta, grad_reverse, find_positive
 
 class _fasterRCNN(nn.Module):
     """ faster RCNN """
@@ -37,9 +37,11 @@ class _fasterRCNN(nn.Module):
         self.grid_size = cfg.POOLING_SIZE * 2 if cfg.CROP_RESIZE_WITH_MAX_POOL else cfg.POOLING_SIZE
         self.RCNN_roi_crop = _RoICrop()
 
+        cfg_key = 'TRAIN' if self.training else 'TEST'
+        self.positive_thresh = cfg[cfg_key].RPN_CONS_POSITIVE_THRESH
+
     def forward(self, im_data, im_info, gt_boxes, num_boxes,target=False,eta=1.0):
         batch_size = im_data.size(0)
-
         im_info = im_info.data
         gt_boxes = gt_boxes.data
         num_boxes = num_boxes.data
@@ -49,25 +51,26 @@ class _fasterRCNN(nn.Module):
         if self.lc:
             d_pixel, _ = self.netD_pixel(grad_reverse(base_feat1, lambd=eta))
             #print(d_pixel)
-            if not target:
-                _, feat_pixel = self.netD_pixel(base_feat1.detach())
+            # if not target:
+            #     _, feat_pixel = self.netD_pixel(base_feat1.detach())
+            _, feat_pixel = self.netD_pixel(base_feat1.detach())
         else:
             d_pixel = self.netD_pixel(grad_reverse(base_feat1, lambd=eta))
         base_feat = self.RCNN_base2(base_feat1)
         if self.gc:
             domain_p, _ = self.netD(grad_reverse(base_feat, lambd=eta))
-            if target:
-                return d_pixel,domain_p#, diff
+            # if target:
+                # return d_pixel,domain_p#, diff
             _,feat = self.netD(base_feat.detach())
         else:
             domain_p = self.netD(grad_reverse(base_feat, lambd=eta))
-            if target:
-                return d_pixel,domain_p#,diff
+            # if target:
+            #     return d_pixel,domain_p#,diff
         # feed base feature map tp RPN to obtain rois
         rois, rpn_loss_cls, rpn_loss_bbox = self.RCNN_rpn(base_feat, im_info, gt_boxes, num_boxes)
 
         # if it is training phrase, then use ground trubut bboxes for refining
-        if self.training:
+        if self.training and not target:
             roi_data = self.RCNN_proposal_target(rois, gt_boxes, num_boxes)
             rois, rois_label, rois_target, rois_inside_ws, rois_outside_ws = roi_data
 
@@ -85,7 +88,6 @@ class _fasterRCNN(nn.Module):
 
         rois = Variable(rois)
         # do roi pooling based on predicted rois
-
         if cfg.POOLING_MODE == 'crop':
             # pdb.set_trace()
             # pooled_feat_anchor = _crop_pool_layer(base_feat, rois.view(-1, 5))
@@ -109,33 +111,50 @@ class _fasterRCNN(nn.Module):
             feat = feat.view(1, -1).repeat(pooled_feat.size(0), 1)
             pooled_feat = torch.cat((feat, pooled_feat), 1)
             # compute bbox offset
+        cls_score = self.RCNN_cls_score(pooled_feat)
+        cls_prob = F.softmax(cls_score, 1)
 
         # compute bbox offset
         bbox_pred = self.RCNN_bbox_pred(pooled_feat)
         if self.training and not self.class_agnostic:
-            bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
-            bbox_pred_select = torch.gather(bbox_pred_view, 1, rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
-            bbox_pred = bbox_pred_select.squeeze(1)
+            if not target:
+                bbox_pred_view = bbox_pred.view(bbox_pred.size(0), int(bbox_pred.size(1) / 4), 4)
+                bbox_pred_select = torch.gather(bbox_pred_view, 1, rois_label.view(rois_label.size(0), 1, 1).expand(rois_label.size(0), 1, 4))
+                bbox_pred = bbox_pred_select.squeeze(1)
+            else:
+                cls_pred_ = torch.max(cls_prob, 1)
+                is_fg = (cls_pred_[1] > 0).nonzero().reshape(-1)
+                Consistent_loss = torch.sum(torch.zeros(1)).cuda()
+                if is_fg.shape[0] > 0:
+                    bbox_pred_ = torch.stack([cls_pred_[1] * 4, cls_pred_[1] * 4 + 1, cls_pred_[1] * 4 + 2, cls_pred_[1] * 4 + 3], dim=1)
+                    bbox_pred_ = torch.gather(bbox_pred, 1, bbox_pred_)  # pick the most confident class
+                    max_conf_idx = is_fg[torch.argmax(cls_pred_[0][is_fg])]  # idx of box with max confidence
+                    max_conf_cls = cls_pred_[1][max_conf_idx].item()
+                    candidate = cls_pred_[1] != max_conf_cls
+                    # candidate = cls_pred_[0] > 0.0
+                    pos_bbox_idx = find_positive(rois, bbox_pred_, max_conf_idx, candidate, im_info, iou_threshold=self.positive_thresh)
+                    if len(pos_bbox_idx) > 0:
+                        Consistent_loss = torch.sum(torch.abs(cls_prob[max_conf_idx] - cls_prob[pos_bbox_idx]))
 
         # compute object classification probability
-        cls_score = self.RCNN_cls_score(pooled_feat)
-        cls_prob = F.softmax(cls_score, 1)
 
         RCNN_loss_cls = 0
         RCNN_loss_bbox = 0
 
-        if self.training:
+        if self.training and not target:
             # classification loss
             RCNN_loss_cls = F.cross_entropy(cls_score, rois_label)
 
             # bounding box regression L1 loss
             RCNN_loss_bbox = _smooth_l1_loss(bbox_pred, rois_target, rois_inside_ws, rois_outside_ws)
 
-
         cls_prob = cls_prob.view(batch_size, rois.size(1), -1)
         bbox_pred = bbox_pred.view(batch_size, rois.size(1), -1)
 
-        return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label,d_pixel, domain_p#,diff
+        if not target:
+            return rois, cls_prob, bbox_pred, rpn_loss_cls, rpn_loss_bbox, RCNN_loss_cls, RCNN_loss_bbox, rois_label,d_pixel, domain_p #,diff
+        else:
+            return d_pixel, domain_p, Consistent_loss, len(is_fg) #,diff
 
     def _init_weights(self):
         def normal_init(m, mean, stddev, truncated=False):

@@ -494,3 +494,39 @@ def compare_grid_sample():
     pdb.set_trace()
 
     delta = (grad_input_off.data - grad_input_stn).sum()
+
+from model.rpn.bbox_transform import bbox_transform_inv, clip_boxes
+
+def find_positive(rois, deltas, anchor_idx, candidate, im_info, iou_threshold=0.9):
+    # calculate iou between anchor bbox and other bboxes
+    if cfg.TRAIN.BBOX_NORMALIZE_TARGETS_PRECOMPUTED:
+        # Optionally normalize targets by a precomputed mean and stdev
+        box_deltas = deltas.view(-1, 4) * torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_STDS).cuda() \
+                     + torch.FloatTensor(cfg.TRAIN.BBOX_NORMALIZE_MEANS).cuda()
+        box_deltas = box_deltas.view(1, -1, 4)
+    boxes = rois.data[:, :, 1:5]
+    pred_boxes = bbox_transform_inv(boxes, box_deltas, 1)
+    pred_boxes = clip_boxes(pred_boxes, im_info, 1).squeeze(0).detach().cpu().numpy()
+    candidate_ = candidate.nonzero().reshape(-1).detach().cpu().numpy()
+    ious = calculate_iou(pred_boxes[anchor_idx.item()], pred_boxes[candidate_])
+
+    return candidate_[ious > iou_threshold]
+
+
+def calculate_iou(anchor_box, bboxes):
+    ixmin = np.maximum(bboxes[:, 0], anchor_box[0])
+    iymin = np.maximum(bboxes[:, 1], anchor_box[1])
+    ixmax = np.minimum(bboxes[:, 2], anchor_box[2])
+    iymax = np.minimum(bboxes[:, 3], anchor_box[3])
+    iw = np.maximum(ixmax - ixmin + 1., 0.)
+    ih = np.maximum(iymax - iymin + 1., 0.)
+    inters = iw * ih
+
+    # union
+    uni = ((anchor_box[2] - anchor_box[0] + 1.) * (anchor_box[3] - anchor_box[1] + 1.) +
+           (bboxes[:, 2] - bboxes[:, 0] + 1.) *
+           (bboxes[:, 3] - bboxes[:, 1] + 1.) - inters)
+
+    overlaps = inters / uni
+
+    return overlaps

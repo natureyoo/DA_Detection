@@ -71,9 +71,11 @@ class _ProposalLayer(nn.Module):
 
         pre_nms_topN  = cfg[cfg_key].RPN_PRE_NMS_TOP_N
         post_nms_topN = cfg[cfg_key].RPN_POST_NMS_TOP_N
+        # nms_thresh = cfg[cfg_key].RPN_NMS_THRESH_SOURCE
+        nms_thresh = cfg[cfg_key].RPN_NMS_THRESH
         if target:
             post_nms_topN = cfg[cfg_key].RPN_POST_NMS_TOP_N_TARGET
-        nms_thresh    = cfg[cfg_key].RPN_NMS_THRESH
+            nms_thresh = cfg[cfg_key].RPN_NMS_THRESH_TARGET
         min_size      = cfg[cfg_key].RPN_MIN_SIZE
 
         batch_size = bbox_deltas.size(0)
