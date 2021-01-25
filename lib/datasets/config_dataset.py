@@ -15,17 +15,17 @@ cfg_d = __D
 #
 # Training options
 #with regard to pascal, the directories under the path will be ./VOC2007, ./VOC2012"
-__D.PASCAL = "/VOCdevkit"
+__D.PASCAL = "/home/jayeon/Data/PASCAL-VOC2007/VOCdevkit"
 __D.PASCALCLIP = ""
-__D.PASCALWATER = "/VOCdevkit"
+__D.PASCALWATER = "/home/jayeon/Data/PASCAL-VOC2007/VOCdevkit"
 
 #For these datasets, the directories under the path will be Annotations  ImageSets  JPEGImages."
-__D.CLIPART = "/clipart"
-__D.WATER = "/watercolor"
+__D.CLIPART = "/home/jayeon/Data/Cross-Domain-Detection/clipart"
+__D.WATER = "/home/jayeon/Data/Cross-Domain-Detection/watercolor"
 __D.SIM10K = "Sim10k/VOC2012"
 __D.CITYSCAPE_CAR = "/VOC2007"
-__D.CITYSCAPE = "VOC2007"
-__D.FOGGYCITY = "VOC2007"
+__D.CITYSCAPE = "/home/jayeon/Data/CityScape/city-VOC2007"
+__D.FOGGYCITY = "/home/jayeon/Data/CityScape/foggycity-VOC2007"
 
 
 def _merge_a_into_b(a, b):

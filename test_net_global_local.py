@@ -24,7 +24,7 @@ from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.rpn.bbox_transform import clip_boxes
 from model.nms.nms_wrapper import nms
 from model.rpn.bbox_transform import bbox_transform_inv
-#from model.utils.net_utils import save_net, load_net, vis_detections
+# from model.utils.net_utils import save_net, load_net, vis_detections
 from model.utils.parser_func import parse_args,set_dataset_args
 
 import pdb
@@ -78,7 +78,6 @@ if __name__ == '__main__':
 
   else:
     print("network is not defined")
-    pdb.set_trace()
 
   fasterRCNN.create_architecture()
 
@@ -155,9 +154,9 @@ if __name__ == '__main__':
       RCNN_loss_cls, RCNN_loss_bbox, \
       rois_label,d_pred,_ = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
 
-      scores = cls_prob.data
-      boxes = rois.data[:, :, 1:5]
-      d_pred = d_pred.data
+      scores = cls_prob.data        # proposal class prob
+      boxes = rois.data[:, :, 1:5]  # proposal
+      d_pred = d_pred.data      # bbox delta
       path = data[4]
 
       if cfg.TEST.BBOX_REG:

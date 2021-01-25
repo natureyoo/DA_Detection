@@ -100,7 +100,7 @@ class _fasterRCNN(nn.Module):
             pooled_feat = self.RCNN_roi_pool(base_feat, rois.view(-1,5))
 
         # feed pooled features to top model
-        pooled_feat = self._head_to_tail(pooled_feat)
+        pooled_feat = self._head_to_tail(pooled_feat)   # global average pooling
         #feat_pixel = torch.zeros(feat_pixel.size()).cuda()
         if self.lc:
             feat_pixel = feat_pixel.view(1, -1).repeat(pooled_feat.size(0), 1)

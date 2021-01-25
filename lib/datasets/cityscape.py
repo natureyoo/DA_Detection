@@ -49,7 +49,7 @@ class cityscape(imdb):
         self._classes = ('__background__',  # always index 0
                          'bus', 'bicycle', 'car', 'motorcycle', 'person', 'rider', 'train', 'truck')
         self._class_to_ind = dict(zip(self.classes, xrange(self.num_classes)))
-        self._image_ext = '.jpg'
+        self._image_ext = '.png'
         self._image_index = self._load_image_set_index()
         # Default to roidb handler
         # self._roidb_handler = self.selective_search_roidb
@@ -231,10 +231,10 @@ class cityscape(imdb):
         for ix, obj in enumerate(objs):
             bbox = obj.find('bndbox')
             # Make pixel indexes 0-based
-            x1 = float(bbox.find('xmin').text) - 1
-            y1 = float(bbox.find('ymin').text) - 1
-            x2 = float(bbox.find('xmax').text) - 1
-            y2 = float(bbox.find('ymax').text) - 1
+            x1 = max(float(bbox.find('xmin').text) - 1, 0)
+            y1 = max(float(bbox.find('ymin').text) - 1, 0)
+            x2 = max(float(bbox.find('xmax').text) - 1, 0)
+            y2 = max(float(bbox.find('ymax').text) - 1, 0)
 
             diffc = obj.find('difficult')
             difficult = 0 if diffc == None else int(diffc.text)

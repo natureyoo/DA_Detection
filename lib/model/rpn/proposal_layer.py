@@ -47,7 +47,7 @@ class _ProposalLayer(nn.Module):
         #     top[1].reshape(1, 1, 1, 1)
 
     def forward(self, input,target=False):
-
+        import pdb
         # Algorithm:
         #
         # for each (H, W) location i
@@ -64,7 +64,7 @@ class _ProposalLayer(nn.Module):
 
         # the first set of _num_anchors channels are bg probs
         # the second set are the fg probs
-        scores = input[0][:, self._num_anchors:, :, :]
+        scores = input[0][:, self._num_anchors:, :, :]  # class probability for fg
         bbox_deltas = input[1]
         im_info = input[2]
         cfg_key = input[3]
@@ -92,7 +92,7 @@ class _ProposalLayer(nn.Module):
         self._anchors = self._anchors.type_as(scores)
         # anchors = self._anchors.view(1, A, 4) + shifts.view(1, K, 4).permute(1, 0, 2).contiguous()
         anchors = self._anchors.view(1, A, 4) + shifts.view(K, 1, 4)
-        anchors = anchors.view(1, K * A, 4).expand(batch_size, K * A, 4)
+        anchors = anchors.view(1, K * A, 4).expand(batch_size, K * A, 4)    # 9 anchor boxes for every feature point
 
         # Transpose and reshape predicted bbox transformations to get them
         # into the same order as the anchors:

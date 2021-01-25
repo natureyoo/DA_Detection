@@ -241,7 +241,7 @@ __C.MOBILENET.WEIGHT_DECAY = 0.00004
 __C.MOBILENET.DEPTH_MULTIPLIER = 1.
 ## Model path. Change the path based on your environment.
 __C.VGG_PATH = "path/vgg16_caffe.pth"
-__C.RESNET_PATH = "path/resnet101_caffe.pth"
+__C.RESNET_PATH = "./resnet101_caffe.pth"
 #
 # MISC
 #

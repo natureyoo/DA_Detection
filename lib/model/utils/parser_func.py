@@ -108,6 +108,9 @@ def parse_args():
     parser.add_argument('--image_dir', dest='image_dir',
                         help='directory to load images for demo',
                         default="images")
+    parser.add_argument('--vis', dest='vis',
+                        help='visualization mode',
+                        action='store_true')
     args = parser.parse_args()
     return args
 
@@ -171,7 +174,7 @@ def set_dataset_args(args, test=False):
             args.set_cfgs_target = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES',
                              '20']
         elif args.dataset_t == "clipart":
-            args.imdb_name_target = "clipart_trainval"
+            args.imdb_name_target = "clipart_train"
             args.imdbval_name_target = "clipart_test"
             args.set_cfgs_target = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES',
                                     '20']
@@ -211,8 +214,8 @@ def set_dataset_args(args, test=False):
             args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES',
                              '30']
         elif args.dataset == "cityscape":
-            args.imdb_name = "cityscape_val"
-            args.imdbval_name = "cityscape_val"
+            args.imdb_name = "cityscape_test"
+            args.imdbval_name = "cityscape_test"
             args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES', '30']
         elif args.dataset == "foggy_cityscape":
             args.imdb_name = "foggy_cityscape_test"
@@ -228,8 +231,8 @@ def set_dataset_args(args, test=False):
             args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES',
                                 '20']
         elif args.dataset == "clipart":
-            args.imdb_name = "clipart_trainval"
-            args.imdbval_name = "clipart_trainval"
+            args.imdb_name = "clipart_test"
+            args.imdbval_name = "clipart_test"
             args.set_cfgs = ['ANCHOR_SCALES', '[8, 16, 32]', 'ANCHOR_RATIOS', '[0.5,1,2]', 'MAX_NUM_GT_BOXES',
                              '20']
         elif args.dataset == "cityscape_car":
