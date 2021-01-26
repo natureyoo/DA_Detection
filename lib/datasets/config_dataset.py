@@ -15,13 +15,13 @@ cfg_d = __D
 #
 # Training options
 #with regard to pascal, the directories under the path will be ./VOC2007, ./VOC2012"
-__D.PASCAL = "/home/jayeon/Data/PASCAL-VOC2007/VOCdevkit"
+__D.PASCAL = "/home/user/jayeon/data/VOCdevkit"
 __D.PASCALCLIP = ""
-__D.PASCALWATER = "/home/jayeon/Data/PASCAL-VOC2007/VOCdevkit"
+__D.PASCALWATER = "/home/user/jayeon/data/VOCdevkit"
 
 #For these datasets, the directories under the path will be Annotations  ImageSets  JPEGImages."
 __D.CLIPART = "/home/jayeon/Data/Cross-Domain-Detection/clipart"
-__D.WATER = "/home/jayeon/Data/Cross-Domain-Detection/watercolor"
+__D.WATER = "/home/user/jayeon/data/cross-domain-detection/datasets/watercolor"
 __D.SIM10K = "Sim10k/VOC2012"
 __D.CITYSCAPE_CAR = "/VOC2007"
 __D.CITYSCAPE = "/home/jayeon/Data/CityScape/city-VOC2007"
