@@ -17,8 +17,8 @@ import yaml
 from model.utils.config import cfg
 from .generate_anchors import generate_anchors
 from .bbox_transform import bbox_transform_inv, clip_boxes, clip_boxes_batch
-from model.nms.nms_wrapper import nms
-
+# from model.nms.nms_wrapper import nms
+from model.roi_layers import nms
 import pdb
 
 DEBUG = False
@@ -33,7 +33,7 @@ class _ProposalLayer(nn.Module):
         super(_ProposalLayer, self).__init__()
 
         self._feat_stride = feat_stride
-        self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales), 
+        self._anchors = torch.from_numpy(generate_anchors(scales=np.array(scales),
             ratios=np.array(ratios))).float()
         self._num_anchors = self._anchors.size(0)
 
@@ -46,7 +46,7 @@ class _ProposalLayer(nn.Module):
         # if len(top) > 1:
         #     top[1].reshape(1, 1, 1, 1)
 
-    def forward(self, input,target=False):
+    def forward(self, input, target=False):
         import pdb
         # Algorithm:
         #
@@ -148,8 +148,8 @@ class _ProposalLayer(nn.Module):
             # 6. apply nms (e.g. threshold = 0.7)
             # 7. take after_nms_topN (e.g. 300)
             # 8. return the top proposals (-> RoIs top)
-
-            keep_idx_i = nms(torch.cat((proposals_single, scores_single), 1), nms_thresh, force_cpu=not cfg.USE_GPU_NMS)
+            # keep_idx_i = nms(torch.cat((proposals_single, scores_single), 1), nms_thresh, force_cpu=not cfg.USE_GPU_NMS)
+            keep_idx_i = nms(proposals_single, scores_single.squeeze(1), nms_thresh)
             keep_idx_i = keep_idx_i.long().view(-1)
 
             if post_nms_topN > 0:
