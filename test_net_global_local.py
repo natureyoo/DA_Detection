@@ -22,7 +22,8 @@ from roi_data_layer.roidb import combined_roidb
 from roi_data_layer.roibatchLoader import roibatchLoader
 from model.utils.config import cfg, cfg_from_file, cfg_from_list, get_output_dir
 from model.rpn.bbox_transform import clip_boxes
-from model.nms.nms_wrapper import nms
+# from model.nms.nms_wrapper import nms
+from model.roi_layers import nms
 from model.rpn.bbox_transform import bbox_transform_inv
 # from model.utils.net_utils import save_net, load_net, vis_detections
 from model.utils.parser_func import parse_args,set_dataset_args
@@ -33,7 +34,6 @@ try:
     xrange          # Python 2
 except NameError:
     xrange = range  # Python 3
-
 
 
 lr = cfg.TRAIN.LEARNING_RATE
@@ -144,6 +144,7 @@ if __name__ == '__main__':
 
   fasterRCNN.eval()
   empty_array = np.transpose(np.array([[],[],[],[],[]]), (1,0))
+
   for i in range(num_images):
 
       data = next(data_iter)
@@ -158,7 +159,6 @@ if __name__ == '__main__':
       rpn_loss_cls, rpn_loss_box, \
       RCNN_loss_cls, RCNN_loss_bbox, \
       rois_label,d_pred,_ = fasterRCNN(im_data, im_info, gt_boxes, num_boxes)
-      import pdb; pdb.set_trace()
 
       scores = cls_prob.data        # proposal class prob
       boxes = rois.data[:, :, 1:5]  # proposal
@@ -207,7 +207,7 @@ if __name__ == '__main__':
             cls_dets = torch.cat((cls_boxes, cls_scores.unsqueeze(1)), 1)
             # cls_dets = torch.cat((cls_boxes, cls_scores), 1)
             cls_dets = cls_dets[order]
-            keep = nms(cls_dets, cfg.TEST.NMS)
+            keep = nms(cls_boxes[order, :], cls_scores[order], cfg.TEST.NMS)
             cls_dets = cls_dets[keep.view(-1).long()]
 
             all_boxes[j][i] = cls_dets.cpu().numpy()
@@ -231,13 +231,10 @@ if __name__ == '__main__':
           .format(i + 1, num_images, detect_time, nms_time))
       sys.stdout.flush()
 
-
-
   with open(det_file, 'wb') as f:
       pickle.dump(all_boxes, f, pickle.HIGHEST_PROTOCOL)
 
   print('Evaluating detections')
   imdb.evaluate_detections(all_boxes, output_dir)
-
   end = time.time()
   print("test time: %0.4fs" % (end - start))
